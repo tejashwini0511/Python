@@ -1,0 +1,64 @@
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
+import time
+
+# Initialize Selenium WebDriver (ensure you have the appropriate driver for your browser)
+driver = webdriver.Chrome()  # or `webdriver.Firefox()`
+
+url = 'https://hprera.nic.in/PublicDashboard'
+driver.get(url)
+
+# Wait for the page to load and the element to be present
+try:
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.ID, "RegisteredProjects"))
+    )
+except Exception as e:
+    print("Error: Page did not load properly or element not found.")
+    driver.quit()
+    exit()
+
+# Get the page source and parse with BeautifulSoup
+soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+# Extract the first 6 project links under the "Registered Projects" section
+project_links = []
+project_table = soup.find('table', {'id': 'RegisteredProjects'})
+if project_table:
+    for row in project_table.find_all('tr')[1:7]:  # Assuming first row is the header
+        link_tag = row.find('a')
+        if link_tag and 'href' in link_tag.attrs:
+            project_links.append(link_tag['href'])
+
+# Function to scrape project details from project detail page
+def scrape_project_details(project_url):
+    driver.get(project_url)
+    project_soup = BeautifulSoup(driver.page_source, 'html.parser')
+    details = {}
+    
+    details['GSTIN No'] = project_soup.find('span', id='ctl00_ContentPlaceHolder1_lblGSTINNo').text.strip()
+    details['PAN No'] = project_soup.find('span', id='ctl00_ContentPlaceHolder1_lblPAN').text.strip()
+    details['Name'] = project_soup.find('span', id='ctl00_ContentPlaceHolder1_lblPromoterName').text.strip()
+    details['Permanent Address'] = project_soup.find('span', id='ctl00_ContentPlaceHolder1_lblAddress').text.strip()
+
+    return details
+
+# Scrape details for each project
+projects_details = []
+for project_link in project_links:
+    project_url = f'https://hprera.nic.in{project_link}'
+    project_details = scrape_project_details(project_url)
+    projects_details.append(project_details)
+    time.sleep(1)  # To avoid overwhelming the server
+
+# Close the Selenium WebDriver
+driver.quit()
+
+# Print the scraped details
+for i, project in enumerate(projects_details, 1):
+    print(f"Project {i}:")
+    for key, value in project.items():
+        print(f"  {key}: {value}")
